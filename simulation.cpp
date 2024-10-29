@@ -1,65 +1,52 @@
+#include "src/MCS.h"
 #include <iostream>
-#include <vector>
-#include <random>
-#include <algorithm>
-#include <tuple>
-
-class Model {
-public:
-    Model(const std::vector<std::vector<double>>& Q)
-        : Q(Q), num_states(Q.size()) {}
-
-    std::tuple<std::vector<int>, std::vector<double>> modeling(int start_state, int S) {    
-        int current_state = start_state; // Текущее состояние
-        std::vector<int> list_of_states = { current_state }; // Список состояний
-        std::vector<double> times = { 0.0 }; // Время переходов состояний
-        
-        double current_time = 0.0; // Время последнего состояния 
-        int s = 0; // Кол-во событий
-
-        std::default_random_engine generator;
-        std::exponential_distribution<double> exp_dist;
-
-        while (s < S) {
-            exp_dist = std::exponential_distribution<double>(-Q[current_state][current_state]);
-            double time_of_next_state = current_time + exp_dist(generator); // Время наступления следующего состояния
-
-            current_time = time_of_next_state;
-
-            std::vector<double> rates = Q[current_state];
-            rates[current_state] = 0; // Убираем вероятность оставаться в том же состоянии
-
-            std::discrete_distribution<int> state_dist(rates.begin(), rates.end());
-            current_state = state_dist(generator);
-            
-            list_of_states.push_back(current_state);
-            times.push_back(current_time);
-
-            s++;
-        }
-
-        return std::make_tuple(list_of_states, times);
-    }
-
-private:
-    std::vector<std::vector<double>> Q; // Матрица переходов
-    int num_states; // Количество состояний
-};
 
 int main() {
-    // Пример инициализации модели
-    std::vector<std::vector<double>> Q = { { -2, 2 }, { 1, -1 } };
+    // Определяем матрицу интенсивности переходов
+    std::vector<std::vector<double>> Q = {
+        {-0.5, 0.5},
+        {0.7, -0.7}
+    };
     
-    Model model(Q);
-    auto result = model.modeling(0, 10);
-    
-    // Обработка результатов
-    auto list_of_states = std::get<0>(result);
-    auto times = std::get<1>(result);
+    MCS model(Q);
+    int start_state = 0;
+    int S = 100;      
+    int N = 1000;      
+    double delta_t = 1.0; 
 
-    // Вывод результатов
-    for (int i = 0; i < list_of_states.size(); i++) {
-        std::cout << "State: " << list_of_states[i] << "|"<< times[i] << std::endl;
+    auto [realizations, state_count_at_intervals] = model.modeling(start_state, S, N, delta_t);
+
+    // Выводим все реализации
+    // std::cout << "All Realizations:\n";
+    // for (int n = 0; n < realizations.size(); ++n) {
+    //     const auto& [states, times] = realizations[n];
+    //     std::cout << "Realization " << n + 1 << ":\n";
+    //     for (size_t i = 0; i < states.size(); ++i) {
+    //         std::cout << "  State: " << states[i] << ", Time: " << times[i] << '\n';
+    //     }
+    //     std::cout << std::endl;
+    // }
+
+    std::cout << "State '1' distribution over full seconds:\n";
+    for (int t = 0; t < state_count_at_intervals.size(); ++t) {
+        std::cout << "At second " << t << ": " << state_count_at_intervals[t] << std::endl;
     }
+
+    std::cout << "State '1' distribution over time intervals:\n";
+    
+    double scaling_factor = 0.2; // Коэффициент масштабирования
+    for (int t = 0; t < state_count_at_intervals.size(); ++t) {
+        std::cout << "Time interval " << t << ": ";
+
+        int stars_to_display = static_cast<int>(state_count_at_intervals[t] * scaling_factor);
+        
+
+        for (int i = 0; i < stars_to_display; ++i) {
+            std::cout << "*";
+        }
+
+        std::cout << " (" << state_count_at_intervals[t] << ")\n"; 
+    }
+    std::cin.get();
     return 0;
 }
