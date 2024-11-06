@@ -7,8 +7,7 @@
 class MCS {
 public:
     MCS(const std::vector<std::vector<double>>& Q);
-    std::tuple<std::vector<std::tuple<std::vector<int>, std::vector<double>>>, std::vector<int>> 
-    modeling(int start_state, int S, int N, double delta_t);
+    std::tuple<std::vector<std::tuple<std::vector<int>, std::vector<double>>>, std::tuple<std::vector<int>, std::vector<double>>> modeling(int start_state, int S, int N, double delta_t);
 
 private:
     std::vector<std::vector<double>> Q;

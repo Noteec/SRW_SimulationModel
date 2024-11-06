@@ -1,14 +1,31 @@
 #include "MCS.h"
 #include <random>
 #include <algorithm>
+#include <set>
+#include <map>
+
+void selectionSort(std::vector<double>& vec1, std::vector<int>& vec2) {
+    int n = vec1.size();
+    for (int i = 0; i < n - 1; ++i) {
+        int minIndex = i;
+        for (int j = i + 1; j < n; ++j) {
+            if (vec1[j] < vec1[minIndex]) {
+                minIndex = j;
+            }
+        }
+        std::swap(vec1[i], vec1[minIndex]);
+        std::swap(vec2[i], vec2[minIndex]);
+    }
+}
 
 MCS::MCS(const std::vector<std::vector<double>>& Q)
     : Q(Q), num_states(Q.size()) {}
 
-std::tuple<std::vector<std::tuple<std::vector<int>, std::vector<double>>>, std::vector<int>> 
-MCS::modeling(int start_state, int S, int N, double delta_t) {
+std::tuple<std::vector<std::tuple<std::vector<int>, std::vector<double>>>, std::tuple<std::vector<int>, std::vector<double>>> MCS::modeling(int start_state, int S, int N, double delta_t) {
+
     std::vector<std::tuple<std::vector<int>, std::vector<double>>> realizations;
 
+    // Генерация N реализаций
     for (int n = 0; n < N; ++n) {
         int current_state = start_state;
         std::vector<int> list_of_states = { current_state }; 
@@ -27,37 +44,46 @@ MCS::modeling(int start_state, int S, int N, double delta_t) {
             rates[current_state] = 0;
 
             std::discrete_distribution<int> state_dist(rates.begin(), rates.end());
-            current_state = state_dist(generator);
+            int next_state = state_dist(generator);
 
-            list_of_states.push_back(current_state);
+            list_of_states.push_back(next_state);
             times.push_back(current_time);
 
+            current_state = next_state;
             s++;
         }
 
         realizations.emplace_back(list_of_states, times);
     }
 
-    double max_time = 0.0;
-    for (const auto& realization : realizations) {
-        const auto& [states, times] = realization;
-        double last_time = times.back(); 
-        max_time = std::max(max_time, last_time);
+
+    std::vector<int> all_states;
+    std::vector<double> all_times;
+
+    for(const auto& realization : realizations){
+        const auto& times = std::get<1>(realization);
+        const auto& states = std::get<0>(realization);
+
+        all_times.insert(all_times.end(), times.begin(), times.end());
+        all_states.insert(all_states.end(), states.begin(), states.end());
     }
 
+    selectionSort(all_times, all_states);
+    
+    std::vector<int> active_process_count_at_times(N * S + 1,0);
 
-    int size = static_cast<int>(max_time) + 1;
-    std::vector<int> state_count_at_intervals(size, 0); 
-
-    for (const auto& realization : realizations) {
-        const auto& [states, times] = realization;
-        for (size_t i = 0; i < states.size(); ++i) {
-            int interval_index = static_cast<int>(times[i] / delta_t);
-            if (states[i] == 1 && interval_index < size) {
-                state_count_at_intervals[interval_index]++;
-            }
+    for(int i = N; i < N * S; i++){
+        if(all_states[i]){
+            active_process_count_at_times[i]++;
+            active_process_count_at_times[i + 1] = active_process_count_at_times[i];
+        }
+        else{
+            active_process_count_at_times[i]--;
+            active_process_count_at_times[i + 1] = active_process_count_at_times[i];
         }
     }
 
-    return std::make_tuple(realizations, state_count_at_intervals);
+    std::tuple<std::vector<int>, std::vector<double>> process_count_and_times = std::make_tuple(active_process_count_at_times, all_times);
+
+    return std::make_tuple(realizations, process_count_and_times);
 }
