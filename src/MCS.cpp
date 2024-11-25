@@ -11,15 +11,15 @@ class MarkovSystem {
 public:
     using Matrix = std::vector<std::vector<double>>;
 
-    // Конструктор класса
+    // Constructor for the class
     MarkovSystem(double lambda, const Matrix& Q, double total_time, int num_requests)
         : lambda(lambda), Q(Q), total_time(total_time), num_requests(num_requests) {
         if (Q.size() != 2 || Q[0].size() != 2 || Q[1].size() != 2) {
-            throw std::invalid_argument("Матрица интенсивности должна быть размером 2x2");
+            throw std::invalid_argument("The intensity matrix must be of size 2x2");
         }
     }
 
-    // Запуск симуляции
+    // Run simulation
     void run() {
         for (int i = 0; i < num_requests; ++i) {
             threads.emplace_back(&MarkovSystem::simulate_request, this, i + 1);
@@ -29,45 +29,48 @@ public:
             thread.join();
         }
 
-        // Вывод вероятностей для различных значений k
+        // Calculate and display the probabilities for various k values
         calculate_probability_of_k_active_requests();
     }
 
 private:
-    double lambda;                       // Интенсивность времени между событиями
-    Matrix Q;                            // Матрица интенсивности переходов
-    double total_time;                   // Общее время симуляции
-    int num_requests;                    // Количество заявок для симуляции
-    std::vector<std::thread> threads;    // Потоки для выполнения заявок
-    std::atomic<int> active_requests{0}; // Количество активных заявок
-    std::mutex output_mutex;             // Мьютекс для синхронизации вывода
-    std::map<int, int> active_count_map;  // Карта для подсчета количества активных заявок
-    int total_time_steps = 0;             // Общее количество шагов времени
+    double lambda;                       // Intensity for time between events
+    Matrix Q;                            // Transition intensity matrix
+    double total_time;                   // Total simulation time
+    int num_requests;                    // Number of requests to simulate
+    std::vector<std::thread> threads;    // Threads for simulating requests
+    std::atomic<int> active_requests{0}; // Tracks active requests (state == 1)
+    std::mutex output_mutex;             // Mutex for synchronizing output
+    std::map<int, int> active_count_map;  // Map to count the number of active requests
+    int total_time_steps = 0;             // Total number of time steps (for probability calculation)
 
-    // Функция для симуляции одной заявки
+    // Function to simulate a single request
     void simulate_request(int request_id) {
-        // Инициализация генераторов случайных чисел
+        // Initialize random number generators
         std::random_device rd;
         std::mt19937 gen(rd());
         std::exponential_distribution<> exp_dist(lambda);
         std::uniform_real_distribution<> uniform_dist(0.0, 1.0);
 
-        // Начальное состояние случайным образом из {0, 1}
-        int current_state = (uniform_dist(gen) < 0.5) ? 0 : 1;  // Равномерное распределение
+        // Initial state chosen randomly from {0, 1}
+        int current_state = (uniform_dist(gen) < 0.5) ? 0 : 1;  // Randomly chosen initial state (0 or 1)
 
         double current_time = 0.0;
 
         std::vector<double> times = {current_time};
         std::vector<int> states = {current_state};
 
-        // Увеличение счетчика активных заявок
-        active_requests++;
+        // Increment active request count if state is 1 (active)
+        if (current_state == 1) {
+            active_requests++;
+        }
 
         while (current_time < total_time) {
-            // Учитываем количество активных заявок
+            // Adjust lambda based on the number of active requests (state == 1)
             int active = active_requests.load();
-            double adjusted_lambda = lambda / active; // Уменьшаем интенсивность в зависимости от нагрузки
-            double time_to_next_event = std::exponential_distribution<>(adjusted_lambda)(gen);
+            double adjusted_lambda = lambda / active;  // Adjust lambda for active requests
+            std::exponential_distribution<> dynamic_exp_dist(adjusted_lambda);  // Reinitialize with adjusted lambda
+            double time_to_next_event = dynamic_exp_dist(gen);  // Use dynamically adjusted lambda
 
             current_time += time_to_next_event;
 
@@ -75,34 +78,39 @@ private:
                 break;
             }
 
-            // Вероятности переходов
-            double q_out = -Q[current_state][current_state];
+            // Transition probabilities
+            double q_out = -Q[current_state][current_state];  // Transition out intensity
             double prob_transition = Q[current_state][1 - current_state] / q_out;
 
-            // Переход между состояниями
+            // Transition between states
             if (uniform_dist(gen) < prob_transition) {
+                // State transition
                 current_state = 1 - current_state;
+
+                // Update active request count based on the new state
+                if (current_state == 1) {
+                    active_requests++;  // This request is now active
+                } else {
+                    active_requests--;  // This request is no longer active
+                }
             }
 
-            // Сохранение данных
+            // Save data for times and states
             times.push_back(current_time);
             states.push_back(current_state);
 
-            // Подсчёт количества активных заявок на каждом шаге времени
-            active_count_map[active]++;
+            // Track the number of active requests at this time step
+            active_count_map[active_requests.load()]++;
             total_time_steps++;
         }
 
-        // Уменьшение счетчика активных заявок
-        active_requests--;
-
-        // Вывод результатов
-        print_results(request_id, times, states);
+        // Output the results for this request
+        //print_results(request_id, times, states);
     }
 
-    // Метод для вывода результатов заявки
+    // Method to output the results of a single request simulation
     void print_results(int request_id, const std::vector<double>& times, const std::vector<int>& states) {
-        std::lock_guard<std::mutex> lock(output_mutex); // Защита вывода
+        std::lock_guard<std::mutex> lock(output_mutex); // Protect the output
         std::cout << "Request #" << request_id << "\n";
         std::cout << std::fixed << std::setprecision(2);
         std::cout << "Time\tState\n";
@@ -112,12 +120,13 @@ private:
         std::cout << "-----------------------------\n";
     }
 
-    // Метод для вычисления вероятности нахождения системы с k активными заявками
+    // Method to calculate and output the probability of having k active requests
     void calculate_probability_of_k_active_requests() {
         std::lock_guard<std::mutex> lock(output_mutex);
-        std::cout << "Probability:\n";
+
+        // Calculate the probability for each k active requests
+        std::cout << "Probability of k active requests:\n";
         for (int k = 0; k <= num_requests; ++k) {
-            // Получаем количество наблюдений для k активных заявок
             int count = active_count_map[k];
             double probability = static_cast<double>(count) / total_time_steps;
             std::cout << "k = " << k << ": " << probability << "\n";
