@@ -2,8 +2,7 @@
 
 int main() {
     // Параметры симуляции
-    double lambda = 1;    // Среднее количество заявок в единицу времени
-    double total_time = 100000; // Общее время симуляции
+    double total_time = 1000; // Общее время симуляции
     int num_requests = 10;   // Количество заявок для симуляции
 
     // Матрица интенсивности переходов Q
@@ -13,7 +12,7 @@ int main() {
     };
 
     // Создание и запуск системы
-    MarkovSystem system(lambda, Q, total_time, num_requests);
+    MarkovSystem system(Q, total_time, num_requests);
     system.run();
 
     std::cin.get();
