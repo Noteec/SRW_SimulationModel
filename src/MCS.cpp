@@ -116,17 +116,21 @@ private:
         // Массив для подсчета количества активных заявок в каждый момент времени
         std::vector<int> active_requests_count(time_points.size(), 0);
 
+        // for(int i = 0; i < states.size(); i++){
+        //     std::cout << time_points[i] << " : " << states[i] << std::endl;
+        // }
+
         int active_requests = 0;
         // Подсчет количества активных заявок на каждый момент времени
-        for (int i = 0; i < time_points.size(); ++i) {
-            if (states[i] == 1) {
-                active_requests++;
+       for (int i = 0; i < states.size(); ++i) {
+            if (i == 0) {
+                active_requests_count[i] = (states[i] > 0 ? 1 : 0);
             } else {
-                active_requests--;
+                active_requests_count[i] = active_requests_count[i - 1] +
+                                                (states[i] > 0 ? 1 : -1);
+                active_requests_count[i] = std::max(0, active_requests_count[i]);
             }
-
-            active_requests_count[i] = active_requests;
-        }
+       }
 
         // Подсчет частоты встречаемости каждого значения количества активных заявок
         std::map<int, int> active_count_map;
